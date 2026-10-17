@@ -1,0 +1,213 @@
+<?xml version="1.0"?>
+
+<robot name="mecanum_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Ajusta estas propiedades si necesitas afinar la pose inicial del modelo -->
+  <xacro:property name="mesh_scale" value="0.001 0.001 0.001"/>
+  <xacro:property name="base_link_z" value="0.04"/>
+  <xacro:property name="wheel_radius" value="0.026"/>
+  <xacro:property name="wheel_width" value="0.024"/>
+  <xacro:property name="wheel_x" value="0.055"/>
+  <xacro:property name="wheel_y" value="0.085000"/>
+  <xacro:property name="wheel_z" value="0.008786"/>
+  <xacro:property name="head_x" value="0.0"/>
+  <xacro:property name="head_y" value="0.0"/>
+  <xacro:property name="head_z" value="0.0"/>
+  <!-- Punto real de pivote del servo de pan, calculado desde la geometria de cabeza.stl
+       (centro X/Y del mesh, base del vastago del servo en Z) -->
+  <xacro:property name="head_pivot_x" value="0.1278"/>
+  <xacro:property name="head_pivot_y" value="-0.0322"/>
+  <xacro:property name="head_pivot_z" value="0.014"/>
+  <xacro:property name="base_length" value="0.30"/>
+  <xacro:property name="base_width" value="0.20"/>
+  <xacro:property name="base_height" value="0.08"/>
+  <xacro:property name="head_length" value="0.12"/>
+  <xacro:property name="head_width" value="0.10"/>
+  <xacro:property name="head_height" value="0.08"/>
+  <xacro:property name="ultrasonic_x" value="0.15"/>
+  <xacro:property name="ultrasonic_y" value="-0.035"/>
+  <xacro:property name="ultrasonic_z" value="0.06"/>
+  <xacro:property name="ultrasonic_length" value="0.018"/>
+  <xacro:property name="ultrasonic_width" value="0.012"/>
+  <xacro:property name="ultrasonic_height" value="0.008"/>
+
+  <xacro:macro name="wheel_link" params="link_name joint_name mesh_file joint_x joint_y joint_z visual_rpy">
+    <link name="${link_name}">
+      <visual>
+        <origin xyz="0 0 0" rpy="${visual_rpy}"/>
+        <geometry>
+          <mesh filename="${mesh_file}" scale="${mesh_scale}"/>
+        </geometry>
+        <material name="wheel_black">
+          <color rgba="0.05 0.05 0.05 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.25"/>
+        <inertia ixx="0.00018" ixy="0.0" ixz="0.0" iyy="0.00020" iyz="0.0" izz="0.00018"/>
+      </inertial>
+    </link>
+
+    <joint name="${joint_name}" type="continuous">
+      <parent link="base_link"/>
+      <child link="${link_name}"/>
+      <axis xyz="0 1 0"/>
+      <origin xyz="${joint_x} ${joint_y} ${joint_z}" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <link name="base_footprint"/>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://mecanum_robot/meshes/chasis.stl" scale="${mesh_scale}"/>
+      </geometry>
+      <material name="chassis_blue">
+        <color rgba="0.12 0.30 0.95 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${base_length} ${base_width} ${base_height}"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="3.0"/>
+      <inertia ixx="0.0137" ixy="0.0" ixz="0.0" iyy="0.0272" iyz="0.0" izz="0.0377"/>
+    </inertial>
+  </link>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${base_link_z}" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:wheel_link
+    link_name="front_left_wheel_link"
+    joint_name="front_left_wheel_joint"
+    mesh_file="package://mecanum_robot/meshes/Rueda.stl"
+    joint_x="0.111638"
+    joint_y="0"
+    joint_z="0.005114"
+    visual_rpy="0 0 3.14159265359"/>
+
+  <xacro:wheel_link
+    link_name="front_right_wheel_link"
+    joint_name="front_right_wheel_joint"
+    mesh_file="package://mecanum_robot/meshes/Rueda.stl"
+    joint_x="0.111638"
+    joint_y="-0.073"
+    joint_z="0.005114"
+    visual_rpy="0 0 0"/>
+
+  <xacro:wheel_link
+    link_name="rear_left_wheel_link"
+    joint_name="rear_left_wheel_joint"
+    mesh_file="package://mecanum_robot/meshes/Rueda.stl"
+    joint_x="0.031638"
+    joint_y="0"
+    joint_z="0.005114"
+    visual_rpy="0 0 3.14159265359"/>
+
+  <xacro:wheel_link
+    link_name="rear_right_wheel_link"
+    joint_name="rear_right_wheel_joint"
+    mesh_file="package://mecanum_robot/meshes/Rueda.stl"
+    joint_x="0.031638"
+    joint_y="-0.073"
+    joint_z="0.005114"
+    visual_rpy="0 0 0"/>
+
+  <link name="head_link">
+    <visual>
+      <origin xyz="${-head_pivot_x} ${-head_pivot_y} ${-head_pivot_z}" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://mecanum_robot/meshes/cabeza.stl" scale="${mesh_scale}"/>
+      </geometry>
+      <material name="head_gray">
+        <color rgba="0.65 0.65 0.68 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="${-head_pivot_x} ${-head_pivot_y} ${-head_pivot_z}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${head_length} ${head_width} ${head_height}"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="${-head_pivot_x} ${-head_pivot_y} ${-head_pivot_z}" rpy="0 0 0"/>
+      <mass value="0.6"/>
+      <inertia ixx="0.00082" ixy="0.0" ixz="0.0" iyy="0.00136" iyz="0.0" izz="0.00155"/>
+    </inertial>
+  </link>
+
+  <joint name="head_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="head_link"/>
+    <origin xyz="${head_x + head_pivot_x} ${head_y + head_pivot_y} ${head_z + head_pivot_z}" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.5708" upper="1.5708" effort="1.0" velocity="1.0"/>
+  </joint>
+
+  <link name="ultrasonic_link">
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${ultrasonic_length} ${ultrasonic_width} ${ultrasonic_height}"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.02"/>
+      <inertia ixx="1.0e-6" ixy="0.0" ixz="0.0" iyy="1.2e-6" iyz="0.0" izz="0.8e-6"/>
+    </inertial>
+  </link>
+
+  <joint name="ultrasonic_joint" type="fixed">
+    <parent link="head_link"/>
+    <child link="ultrasonic_link"/>
+    <origin xyz="${ultrasonic_x - head_pivot_x} ${ultrasonic_y - head_pivot_y} ${ultrasonic_z - head_pivot_z}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Plugin de simulacion para Gazebo. rviz2/robot_state_publisher ignoran
+       los tags <gazebo>, asi que esto no afecta al robot real.
+       Se usa planar_move (mueve el modelo directo en X/Y/yaw desde /cmd_vel)
+       en vez de fisica de ruedas mecanum individuales, porque la friccion de
+       rodillos angulados es notoriamente inestable en Gazebo Classic. El
+       mismo /cmd_vel que mueve al robot real mueve tambien a este modelo. -->
+  <gazebo>
+    <plugin name="planar_move" filename="libgazebo_ros_planar_move.so">
+      <ros>
+        <remapping>cmd_vel:=cmd_vel</remapping>
+        <remapping>odom:=gazebo_odom</remapping>
+      </ros>
+      <update_rate>100</update_rate>
+      <publish_rate>10</publish_rate>
+      <publish_odom>true</publish_odom>
+      <publish_odom_tf>true</publish_odom_tf>
+      <odometry_frame>gazebo_odom</odometry_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+      <covariance_x>0.0001</covariance_x>
+      <covariance_y>0.0001</covariance_y>
+      <covariance_yaw>0.01</covariance_yaw>
+    </plugin>
+  </gazebo>
+
+</robot>
