@@ -25,7 +25,8 @@ setup(
     + package_data_files('urdf', '*.xacro')
     + package_data_files('meshes', '*.stl')
     + package_data_files('rviz', '*.rviz')
-    + package_data_files('config', '*.yaml'),
+    + package_data_files('config', '*.yaml')
+    + package_data_files('worlds', '*.world'),
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='danilaly',
@@ -50,6 +51,8 @@ setup(
             'visual_rotation_test_node = mecanum_robot.visual_rotation_test_node:main',
             'fault_monitor_node = mecanum_robot.fault_monitor_node:main',
             'validation_test_node = mecanum_robot.validation_test_node:main',
+            'gazebo_head_bridge_node = mecanum_robot.gazebo_head_bridge_node:main',
+            'gazebo_line_bridge_node = mecanum_robot.gazebo_line_bridge_node:main',
         ],
     },
 )

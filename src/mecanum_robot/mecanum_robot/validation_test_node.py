@@ -2,16 +2,33 @@
 
 import csv
 import math
+import signal
 import statistics
 import threading
 import time
 from datetime import datetime
 
 import rclpy
+from gazebo_msgs.srv import SetEntityState
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import Range
+
+# Referencia global al nodo activo, para que el manejador de SIGINT (Ctrl+C)
+# pueda mandar la parada de emergencia de forma sincrona, antes de que rclpy
+# invalide el contexto del publisher. Confirmado en pruebas reales: sin esto,
+# node.stop() en el flujo normal de cierre puede fallar silenciosamente
+# ("publisher's context is invalid") y el robot se queda ejecutando la
+# ultima velocidad distinta de cero.
+_active_node = {'node': None}
+
+
+def _emergency_stop_handler(signum, frame):
+    node = _active_node.get('node')
+    if node is not None:
+        node.stop(retries=8, period=0.05)
+    raise KeyboardInterrupt
 
 
 class ValidationTestNode(Node):
@@ -54,6 +71,7 @@ class ValidationTestNode(Node):
             self.create_subscription(Range, '/ultrasonic_range', self._range_callback, 10)
         else:
             self.create_subscription(Odometry, '/gazebo_odom', self._odom_callback, 10)
+            self.set_entity_state_client = self.create_client(SetEntityState, '/set_entity_state')
 
     def _range_callback(self, msg):
         self.latest_range = msg.range
@@ -83,11 +101,42 @@ class ValidationTestNode(Node):
             time.sleep(period)
         # Parada explicita: en Gazebo el plugin planar_move no tiene deadman
         # propio, se queda con la ultima velocidad para siempre si no se le
-        # manda cero.
+        # manda cero. En el robot real, mandar la parada varias veces protege
+        # contra perdida de paquetes por WiFi (un solo mensaje puede no llegar).
         self.stop()
 
-    def stop(self):
-        self.cmd_vel_publisher.publish(Twist())
+    def stop(self, retries=5, period=0.05):
+        zero = Twist()
+        for _ in range(retries):
+            try:
+                self.cmd_vel_publisher.publish(zero)
+            except Exception:
+                pass
+            time.sleep(period)
+
+    def reset_sim_pose(self, timeout=2.0):
+        if not self.set_entity_state_client.wait_for_service(timeout_sec=timeout):
+            self.get_logger().warn('Servicio /set_entity_state no disponible, no se reseteo la pose.')
+            return
+        request = SetEntityState.Request()
+        request.state.name = 'mecanum_robot'
+        request.state.pose.position.x = 0.0
+        # y = 0.3 para que las pruebas de desplazamiento recto no crucen la
+        # franja de linea situada en y=0 (pensada para los sensores IR, no
+        # para que el robot pase fisicamente por encima durante estas
+        # pruebas de cinematica pura).
+        request.state.pose.position.y = 0.3
+        # z = 0.002 coincide con la altura de reposo real del modelo (medida
+        # con "gz model -p"). Con z mayor el robot cae y rebota durante
+        # ~1.4 s tras el reset, y el solver de contactos de ODE bloquea el
+        # movimiento lateral mientras se asienta, invalidando la medida.
+        request.state.pose.position.z = 0.002
+        request.state.pose.orientation.w = 1.0
+        future = self.set_entity_state_client.call_async(request)
+        start = time.time()
+        while not future.done() and (time.time() - start) < timeout:
+            time.sleep(0.02)
+        time.sleep(0.3)
 
 
 def run_trial(node, writer, condition_index, vx, duration, repetition):
@@ -95,15 +144,21 @@ def run_trial(node, writer, condition_index, vx, duration, repetition):
         expected = vx * duration
         d_before = node.sample_distance_real()
         while d_before is None or (d_before - expected * 1.3) < node.safety_margin:
+            node.stop()
             if d_before is None:
                 print('Lectura del ultrasonico invalida (fuera de rango). '
                       'Revisa que el robot este frente a la pared, dentro del cono del sensor.')
             else:
-                print(f'Quedan {d_before:.2f} m hasta la pared, no alcanza margen de seguridad '
-                      f'para este movimiento (esperado ~{expected:.2f} m).')
+                required = expected * 1.3 + node.safety_margin
+                print(f'Quedan {d_before:.2f} m hasta la pared, hacen falta al menos '
+                      f'{required:.2f} m para este movimiento con margen de seguridad.')
             input('Reposiciona el robot mas lejos de la pared y presiona Enter para continuar...')
             d_before = node.sample_distance_real()
     else:
+        # Se resetea la pose antes de cada repeticion para que todas partan
+        # del mismo punto; sin esto, el desplazamiento se acumula entre
+        # repeticiones hasta que el robot choca con una pared del mundo.
+        node.reset_sim_pose()
         d_before = node.sample_position_sim()
         while d_before is None:
             time.sleep(0.2)
@@ -147,6 +202,8 @@ def run_trial(node, writer, condition_index, vx, duration, repetition):
 def main(args=None):
     rclpy.init(args=args)
     node = ValidationTestNode()
+    _active_node['node'] = node
+    signal.signal(signal.SIGINT, _emergency_stop_handler)
 
     spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     spin_thread.start()
@@ -190,8 +247,12 @@ def main(args=None):
         else:
             print(f'  Condicion {condition_index}: sin datos validos')
 
-    node.destroy_node()
+    # Apagar el contexto antes de destruir el nodo: si se destruye primero
+    # mientras el hilo de spin de fondo todavia lo esta usando, rclpy aborta
+    # el proceso con "terminate called without an active exception".
     rclpy.shutdown()
+    spin_thread.join(timeout=2.0)
+    node.destroy_node()
 
 
 if __name__ == '__main__':

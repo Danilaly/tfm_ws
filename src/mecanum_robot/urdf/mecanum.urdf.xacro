@@ -30,6 +30,12 @@
   <xacro:property name="ultrasonic_length" value="0.018"/>
   <xacro:property name="ultrasonic_width" value="0.012"/>
   <xacro:property name="ultrasonic_height" value="0.008"/>
+  <xacro:property name="camera_x" value="0.15"/>
+  <xacro:property name="camera_y" value="0.0"/>
+  <xacro:property name="camera_z" value="0.04"/>
+  <xacro:property name="line_sensor_x" value="0.13"/>
+  <xacro:property name="line_sensor_y" value="0.04"/>
+  <xacro:property name="line_sensor_z" value="-0.035"/>
 
   <xacro:macro name="wheel_link" params="link_name joint_name mesh_file joint_x joint_y joint_z visual_rpy">
     <link name="${link_name}">
@@ -185,6 +191,154 @@
     <child link="ultrasonic_link"/>
     <origin xyz="${ultrasonic_x - head_pivot_x} ${ultrasonic_y - head_pivot_y} ${ultrasonic_z - head_pivot_z}" rpy="0 0 0"/>
   </joint>
+
+  <link name="camera_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="1.0e-6" ixy="0.0" ixz="0.0" iyy="1.0e-6" iyz="0.0" izz="1.0e-6"/>
+    </inertial>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:macro name="line_sensor_link" params="link_name joint_y">
+    <link name="${link_name}">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.001"/>
+        <inertia ixx="1.0e-7" ixy="0.0" ixz="0.0" iyy="1.0e-7" iyz="0.0" izz="1.0e-7"/>
+      </inertial>
+    </link>
+    <joint name="${link_name}_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${link_name}"/>
+      <origin xyz="${line_sensor_x} ${joint_y} ${line_sensor_z}" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:line_sensor_link link_name="line_left_link" joint_y="${line_sensor_y}"/>
+  <xacro:line_sensor_link link_name="line_center_link" joint_y="0"/>
+  <xacro:line_sensor_link link_name="line_right_link" joint_y="${-line_sensor_y}"/>
+
+  <!-- Sensor ultrasonico simulado: mismos parametros que el HC-SR04 real
+       (ultrasonic_sensor_node.py): FOV 0.26 rad, rango 0.02-3.0 m, 10 Hz.
+       Publica en /ultrasonic_range, el mismo topic que el nodo real, para
+       que scan_interpreter_node y fault_monitor_node funcionen sin cambios
+       tanto con el robot fisico como con Gazebo. -->
+  <gazebo reference="ultrasonic_link">
+    <sensor name="ultrasonic_sensor" type="ray">
+      <pose>0 0 0 0 0 0</pose>
+      <visualize>false</visualize>
+      <update_rate>10</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>5</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.13</min_angle>
+            <max_angle>0.13</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.02</min>
+          <max>3.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </ray>
+      <plugin name="ultrasonic_range_plugin" filename="libgazebo_ros_ray_sensor.so">
+        <ros>
+          <remapping>~/out:=ultrasonic_range</remapping>
+        </ros>
+        <output_type>sensor_msgs/Range</output_type>
+        <radiation_type>ultrasound</radiation_type>
+        <frame_name>ultrasonic_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  <!-- Camara simulada: mismos parametros que usb_camera_node.py (320x240,
+       10 Hz), publicando en /camera/image_raw con frame_id camera_link
+       (el mismo que declara el nodo real por defecto). -->
+  <gazebo reference="camera_link">
+    <sensor name="camera_sensor" type="camera">
+      <update_rate>10</update_rate>
+      <camera>
+        <horizontal_fov>1.047</horizontal_fov>
+        <image>
+          <width>320</width>
+          <height>240</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>20</far>
+        </clip>
+      </camera>
+      <plugin name="camera_plugin" filename="libgazebo_ros_camera.so">
+        <camera_name>camera</camera_name>
+        <frame_name>camera_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  <!-- Sensores infrarrojos de linea simulados: tres rayos verticales cortos
+       (izquierda, centro, derecha) que leen la intensidad (laser_retro) de
+       lo que tienen justo debajo. En el mundo se marca la linea con un
+       laser_retro alto distinto del suelo, y gazebo_line_bridge_node
+       convierte esa intensidad en el mismo formato binario [izq,centro,der]
+       que publica line_tracking_sensor_node.py en /line_tracking_sensors. -->
+  <xacro:macro name="line_ray_sensor" params="link_name topic_suffix">
+    <gazebo reference="${link_name}">
+      <sensor name="${link_name}_sensor" type="ray">
+        <pose>0 0 0 0 1.5708 0</pose>
+        <visualize>false</visualize>
+        <update_rate>20</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>1</samples>
+              <resolution>1</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>0</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.001</min>
+            <max>0.1</max>
+            <resolution>0.001</resolution>
+          </range>
+        </ray>
+        <plugin name="${link_name}_plugin" filename="libgazebo_ros_ray_sensor.so">
+          <ros>
+            <remapping>~/out:=line_raw/${topic_suffix}</remapping>
+          </ros>
+          <output_type>sensor_msgs/LaserScan</output_type>
+          <frame_name>${link_name}</frame_name>
+        </plugin>
+      </sensor>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:line_ray_sensor link_name="line_left_link" topic_suffix="left"/>
+  <xacro:line_ray_sensor link_name="line_center_link" topic_suffix="center"/>
+  <xacro:line_ray_sensor link_name="line_right_link" topic_suffix="right"/>
+
+  <!-- Control de la cabeza en Gazebo: teletransporta head_joint a la posicion
+       recibida por trajectory_msgs/JointTrajectory, sin simular dinamica del
+       servo. gazebo_head_bridge_node.py traduce /head_pan_angle (la misma
+       interfaz que usa head_pan_node.py en el robot real) a este formato,
+       permitiendo que head_ultrasonic_scan_node.py haga el barrido igual
+       en el robot real y en Gazebo. -->
+  <gazebo>
+    <plugin name="head_joint_trajectory" filename="libgazebo_ros_joint_pose_trajectory.so">
+      <update_rate>20</update_rate>
+    </plugin>
+  </gazebo>
 
   <!-- Plugin de simulacion para Gazebo. rviz2/robot_state_publisher ignoran
        los tags <gazebo>, asi que esto no afecta al robot real.

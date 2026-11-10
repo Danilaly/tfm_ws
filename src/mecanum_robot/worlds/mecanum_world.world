@@ -1,0 +1,167 @@
+<?xml version="1.0" ?>
+<sdf version="1.5">
+  <world name="default">
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+    <!-- Permite resetear la pose del robot entre repeticiones durante las
+         pruebas de validacion en modo sim, evitando que se acumule
+         desplazamiento hasta chocar con las paredes. -->
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+      <ros>
+        <namespace>/</namespace>
+      </ros>
+      <update_rate>1.0</update_rate>
+    </plugin>
+
+    <!-- Paredes perimetrales: el sensor ultrasonico simulado (rango 3.0 m)
+         produce un mensaje Range no deserializable cuando no detecta nada
+         dentro de rango (bug conocido de gazebo_ros_pkgs/rclpy con NaN en
+         sensor_msgs/Range). Cerrando el mundo se evita esa condicion, ya
+         que siempre hay una pared dentro del alcance del sensor. -->
+    <model name="wall_north">
+      <static>true</static>
+      <pose>0 2.2 0.25 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>4.6 0.1 0.5</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>4.6 0.1 0.5</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="wall_south">
+      <static>true</static>
+      <pose>0 -2.2 0.25 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>4.6 0.1 0.5</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>4.6 0.1 0.5</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="wall_east">
+      <static>true</static>
+      <pose>2.2 0 0.25 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>4.6 0.1 0.5</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>4.6 0.1 0.5</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="wall_west">
+      <static>true</static>
+      <pose>-2.2 0 0.25 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>4.6 0.1 0.5</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>4.6 0.1 0.5</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Obstaculos de prueba para el sensor ultrasonico simulado y los
+         escenarios de navegacion (7.5): frontal, lateral derecho y
+         lateral izquierdo, dentro del barrido de +-60 grados de la cabeza. -->
+    <model name="obstacle_front">
+      <static>true</static>
+      <pose>1.2 0 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material>
+            <ambient>0.8 0.2 0.2 1</ambient>
+            <diffuse>0.8 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obstacle_right">
+      <static>true</static>
+      <pose>1.0 -0.8 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material>
+            <ambient>0.2 0.8 0.2 1</ambient>
+            <diffuse>0.2 0.8 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Franja de linea para los sensores IR simulados: laser_retro alto
+         (100) para distinguirla del suelo (laser_retro por defecto, ~0).
+         El bloque de colision se dejo muy fino (0.0002 m) y a ras del
+         suelo: con 0.002 m de alto actuaba como un escalon fisico real
+         contra el que las ruedas del robot se quedaban enganchadas varios
+         segundos al cruzarlo en linea recta (detectado durante la
+         validacion sim de 8.6). Los sensores de rayos solo necesitan
+         geometria con la que intersectar, no un escalon de esa altura. -->
+    <model name="line_strip">
+      <static>true</static>
+      <pose>0.6 0 0.0001 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.7 0.03 0.0002</size></box></geometry>
+          <laser_retro>100</laser_retro>
+          <surface>
+            <contact>
+              <ode><min_depth>0.0</min_depth></ode>
+            </contact>
+            <friction>
+              <ode><mu>0</mu><mu2>0</mu2></ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.7 0.03 0.0002</size></box></geometry>
+          <material>
+            <ambient>0.05 0.05 0.05 1</ambient>
+            <diffuse>0.05 0.05 0.05 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obstacle_left">
+      <static>true</static>
+      <pose>1.0 0.8 0.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 0.3</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.8 1</ambient>
+            <diffuse>0.2 0.2 0.8 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+  </world>
+</sdf>

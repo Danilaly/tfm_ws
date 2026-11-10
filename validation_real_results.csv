@@ -1,0 +1,2 @@
+mode,condition_index,velocity_mps,duration_s,repetition,d_before,d_after,displacement_m,valid,timestamp
+real,0,0.1,0.5,0,0.460999995470047,0.19099999964237213,0.26999999582767487,True,2026-10-28T10:30:33
